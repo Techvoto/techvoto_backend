@@ -1,0 +1,85 @@
+databases:
+  - name: techvoto-db
+    databaseName: techvoto
+    plan: free
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: techvoto-api
+    runtime: python
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn techvoto.wsgi:application --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: techvoto-db
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: techvoto-redis
+          property: connectionString
+      - key: CACHE_URL
+        fromService:
+          type: keyvalue
+          name: techvoto-redis
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: "techvoto-api.onrender.com"
+      - key: CSRF_TRUSTED_ORIGINS
+        value: "https://techvoto-api.onrender.com,https://your-frontend.vercel.app"
+      - key: CORS_ALLOWED_ORIGINS
+        value: "https://your-frontend.vercel.app"
+      - key: AUTH_COOKIE_SAMESITE
+        value: "None"
+      - key: AUTH_COOKIE_SECURE
+        value: "True"
+      - key: SENTRY_DSN
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+
+  - type: worker
+    name: techvoto-worker
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "celery -A techvoto worker --loglevel=info --concurrency=1"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: techvoto-db
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: techvoto-redis
+          property: connectionString
+      - key: CACHE_URL
+        fromService:
+          type: keyvalue
+          name: techvoto-redis
+          property: connectionString
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: techvoto-api
+          property: SECRET_KEY
+      - key: DEBUG
+        value: "False"
+
+  - type: keyvalue
+    name: techvoto-redis
+    plan: free
+    ipAllowList: []
+    maxmemoryPolicy: allkeys-lru
